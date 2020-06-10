@@ -1,0 +1,1413 @@
+---
+title: 'Gold in Them Tha-R Hills: A Review of R Packages for Exploratory Data Analysis'
+csl: elsevier-harvard.csl
+date: "Draft Version `r Sys.Date()`"
+output:
+  word_document:
+    highlight: tango
+    reference_docx: test_style.docx
+  html_document:
+    df_print: paged
+    fontsettings:
+      family: serif
+      size: 2
+    highlight: tango
+    number_sections: yes
+    search: yes
+    toc: yes
+    toc_depth: '3'
+    toc_float: yes
+  pdf_document: default
+  github_document: default
+bibliography: teaching_resource.bib 
+always_allow_html: yes
+---
+
+<!--  About this file:
+This RMarkdown file (.Rmd) is used to produce earlier drafts of the manuscript.
+Placing referenced data files in the right directory and selecting
+"Knit to Word" in RStudio will produce as a version of the draft. 
+In some places the body texts will differ from those in the final manuscript 
+because the authors  edited the draft in Word directly without copying 
+those changes in this file. However, the R code chunks are exactly the same as 
+those used in preparation for the final manuscript. 
+-->
+
+```{r setup, include=F}
+library(tidyverse) # for data wrangling and visualization
+library(modelr)    # for data resampling
+library(broom)     # for tidying regression tables from lm()
+library(knitr)     # for producing html or Word doc output 
+library(gt)        # for certain table formatting 
+# This package is not available from CRAN. Run the code below:
+# remotes::install_github("rstudio/gt")
+# see more about gt: https://gt.rstudio.com/
+library(ggrepel)   # for avoiding overlapping data point labels 
+library(RColorBrewer) # for using certain color schemes in plots
+library(viridis)    # for using certain color schemes in plots
+library(tidycensus) # for accessing census data API 
+library(stargazer)  # for customizing regression outputs in tables
+
+# other libraries used below:
+# library(rnassqs)  # for accessing NASS data API 
+# library(dygraphs) # for quickly producing interactive dygraphs  
+# library(leaflet)  # for producing interactive maps
+# library(data.table) # for efficient data wrangling 
+# library(magrittr)   # for accssing piping operator 
+
+knitr::opts_chunk$set(warning = FALSE, message=FALSE,
+                      echo=TRUE, #results = "hold",
+                      fig.show = "hold",
+                      fig.width = 6, fig.asp = 0.618,
+                      fig.align = "center", out.width = "70%",
+                      cache = TRUE)
+
+#=== define the api key for data downloading ===#
+census_api_key("34bec756dae5c342ae746638d1d45c6b2229af7f")
+#census_api_key("USE YOUR API KEY")
+
+#=== set working directory ===#
+#setwd("USE YOUR DIRECTORY")
+setwd("/Users/kotaminegishi/Dropbox/R_projects/teaching")
+
+#=== run helpers.R to define functions written in the file ===#
+source("helpers.R")
+
+#=== load the dataset used in this document ===#
+load(file= "datasets/Ag_census_2017.RData")
+
+
+# Set a larger default font size
+theme_set(theme_grey(base_size = 28))
+
+# Set a larger default point size
+update_geom_defaults("point", list(size= 3))
+update_geom_defaults("text", list(size = 5))
+```
+
+
+**Abstract** (200):
+With an accelerated pace of data accumulation in the economy, there is a growing need for data literacy and practical skills to make use of data in the workforce. Applied economics programs have an important role to play in training students in those areas. Teaching tools of data exploration and visualization, also known as exploratory data analysis (EDA), would be a timely addition to existing curriculums. It would also present a new opportunity to engage students through hands-on exercises using real-world data in ways that differ from exercises in statistics. In this article, we review recent developments in the EDA toolkit for statistical computing freeware R, focusing on the `tidyverse` package. Our contributions are three-fold; we present this new generation of tools with a focus on its syntax structure; our examples show how one can use public data of the U.S. census of agriculture for data exploration; and we highlight the practical value of EDA in handling data, uncovering insights, and communicating key aspects of the data.
+
+
+Keywords: exploratory data analysis, data science, data visualization, R programming
+
+JEL codes: A2, Q1, Y1
+
+# Introduction
+
+>
+There's gold in them thar hills … In that ridge lies more gold than man ever dreamt of. There’s millions in it.
+--- Mark Twain in *The American Claimant*.
+>
+
+A hundred seventy years ago Americans flocked to California in search of gold. The Gold Rush has left the country with a powerful image of massive realignment of capital and labor in search of new economic opportunities. With each subsequent era came new manifestations of the Gold Rush in the form of booming industries, invoking a sense of new, ground-breaking opportunities that could lead to permanent structural change in the existing business environments. Today, businesses are gathering and accumulating an enormous amount of data: effective goldmines. In this new Gold Rush, the demand for the skills to understand, explore, and apply data is accelerating. Computer programmers and data scientists are particularly in high demand, and their tool kit is expanding rapidly. In preparing students for an increasingly data-driven world, applied economics programs have an increased role to play through teaching data literacy and modern data analytics skills.
+
+A good starting point may be to teach relevant tools of data exploration and visualization, also known as exploratory data analysis (EDA), that are popular in the field of data science. The exploratory nature of EDA contrasts with statistical modeling and hypothesis testing, a long-standing tradition in modern economics curriculums. An increasing number of economics courses integrate statistical programming in R as an integral topic. Current examples include Microeconomics with R by John Humphries at Yale University, Methodology of Economic Research by Jude Bayham at Colorado State University, econometrics course materials taught with R by Ed Rubin at University of Oregon, and Applied Econometrics by Taro Mieno at University of Nebraska Lincoln. Indeed, the tools of EDA are generally complementary to the teaching of analytical skills and thought processes emphasized in applied economics. Teaching EDA tools would be not only timely but also stimulating for students who have an interest in learning to use real-world data on current socio-economic issues. Hands-on EDA exercises can provide a vital opportunity for students to acquire practical data analysis skills beyond the usual exercises in statistics.
+
+
+In this article, we review recent developments in the EDA toolkit in statistical computing freeware R. Our intended audience includes course instructors, graduate students, and advanced undergraduate students particularly those who are pursuing independent studies, participating in research projects, or serving as teaching assistants. We use datasets familiar to agricultural economists for illustration. Our contributions are three-fold: we present this new generation of tools with a focus on its syntax structure, our examples show how one can use public data of the U.S. census of agriculture for data exploration, and we highlight the practical value of EDA in handling data, uncovering insights, and communicating key aspects of the data. Our review focuses on the tools of the `tidyverse` package, a meta package that includes `ggplot2` and `dplyr` and uses a streamlined coding syntax across its member packages (Wickham et al. 2019).  In writing this article, we borrow core concepts from [R for Data Science](https://r4ds.had.co.nz/) (@Wickham2017). For interested readers, additional resources include [ModernDive](https://moderndive.com/) (Kim2019), [Data Visualization with R](https://rkabacoff.github.io/datavis/) (@Habacoff2019), [Data Visualization A practical introduction](http://socviz.co/index.html) (@Healy2018) and [Geocomputation with R](https://geocompr.robinlovelace.net/) (@Lovelace2019). All R code used in this document is made available in the online appendix.
+
+The rest of the article is organized as follows. We provide a short, general comparison between R and Stata, a popular proprietary statistical software among economists. The main contents of our review of R tools consist of four sections that a) introduce core data visualization methods of ggplot2, b) demonstrate the application of data transformation methods of `dplyr` with U.S. agriculture data, c) provide an analytical example within a data exploration narrative, and d) briefly describes additional tools. The final section concludes the article. 
+
+
+# Comparison: R and Stata
+As a general comparison of software, we comment on relative strengths and weakness of R over *Stata*, the most popular software among agricultural economists.
+
+
+## What they are
+R, formally known as *R Projects*, is a statistical computing and programming language that is available for free of charge. R is not managed by a single person, a group of selected people, or a company. R simply executes commands according to programs, or R functions, that are loaded by default and by the user. To execute commands beyond basic computations and visualization tasks, R users need to load R packages, or collections of R functions developed by R users around the world. Which packages to use depends on the user’s objectives and personal preferences. For example, two popular schools of EDA toolboxes are `tidyverse` package, which is our focus in this article, and `data.table` package.
+
+Stata is a proprietary statistics software from the Stata Corp. As of November 2019, Stata perpetual license for U.S. students are \$225 for Stata/IC (the least powerful version), \$425 for Stata/SE, \$595 for Stata/MP 2-core (midrange capabilities) and \$795 for Stata/MP (the most powerful). In most universities, students can access Stata in their computer labs as well. The Stata Corp is responsible for software updates and additions of Stata commands. Separately, some user-contributed Stata packages, a collection of Stata `ado` files, are made available through RePEc (which stands for Research Papers in Economics). Also, the Stata Corp maintains a quarterly publication of the Stata journal for user-contributed statistical techniques and effective teaching methods in using Stata.
+
+
+
+## Statistical Capability
+R is open-source software with a rapidly-expanding toolkit built in the R user community across diverse fields of statistics and sciences. The universe of R toolkit includes advanced tools of machine learning, Bayesian statistics, and spatial statistics that are of interest to many economists, as well as statistical tools in other disciplines like biostatistics that may help economists working on interdisciplinary research. R offers richer tools than Stata in some fields of econometrics, including, for example, linear or quadratic programming (`Rglpk` and `ipotr` packages), non-linear optimization (`nloptr` package), and advanced quantile regression analyses (`quantreg`, `quantreg.nonpar`, and `bayesQR` packages).
+
+Stata’s development of new tools primarily relies on the Stata Corp’s undertaking. Given its limited resources, the company focuses on statistical tools for social scientists, including economists, with a large emphasis on econometrics. For instance, Stata offers a variety of estimation options for state-of-the-art treatment effects and panel data estimation techniques that are useful to economists. The documentation of various commands in Stata is consistently managed by the Stata Corp and hence user-friendly; in contrast the user-contributed projects like R may lack consistent documentation or transferable command syntaxes across various packages. Thus, a familiarity with both R and Stata would give one an access to a wide range of statistical methods, some of which may be available in one software but not in the other.
+
+
+## Spatial Data Handling
+Many data analyses in agricultural economics involve spatial considerations. R offers an extensive capability in processing spatial data (`sp`, `sf`, `raster`, `rgdal`, `rgeos` packages) and creating geographical maps (`ggplot2` and `tmap` packages). Say, one is interested in understanding the impact of climate on cropping pattern at the sub-county level. He or she could combine the Cropland Data Layer (CDL) files and county boundaries data to summarize a mixture of cropping patterns for each county, all of which can be done within R without having to use specialized programs such as ArcGIS or QGIS. In contrast, Stata has almost no capability of handling spatial data or generating geographic data maps. One exception may be user-contributed mapping commands like `spmap` and `maptile`, which are quite primitive.
+
+## Publicly Available Data
+
+Recent developments in R include the packages dedicated specifically for downloading public access data. One can download data from USDA NASS CDL (`cdlTools` package), Quick Stats (`rnassqs` package), PRISM (`prism` package), Daymet (`daymetr` package), and USGS National Hydrography Dataset, NCSS Soil Survey Geographic dataset, and many others (`FedData` package). These R packages can automate the process of manually downloading individual public data files. Additionally, `httr` package allows for data requests via Application Programming Interface (API), and `jsonlite` package helps deal with JSON data files that are common in API outputs.
+
+# Data visualization with `ggplot2`
+This section provides an overview of data visualization with `ggplot2` package. The `ggplot2` syntax has three essential components for generating data plots:  *data*,  *aes*,  and *geom*. It implements the following philosophy;
+
+
+>
+A statistical graphic is a mapping of **data** variables to **aesthetic** attributes of **geometric** objects.
+--- [@Wilkinson2005]
+>
+
+This simple philosophy helps remember how to relate the three components with each other in coding. Note that datasets are often referred to as data frames, corresponding to R’s *data.frame* class objects.
+
+
+* **data**: a data frame, e.g., the first argument in `ggplot(data, ...)`.
+
+* **aes**:  x and y variables specifying the horizontal and vertical axes and other variables by which data can appear in different colors, shapes, sizes etc., e.g., `aes(x = var_x, y = var_y, color = var_z)`.
+
+* **geom**: geometric objects such as points, lines, bars, etc., e.g., `geom_point()`, `geom_line()`, `geom_bar()`, `geom_histogram()`.
+
+
+Examples would be useful. Figure X contain scatter plots of horsepower and miles per gallon in the `mtcar` dataset, a sample dataset automatically loaded in  `base R`.
+```{r plot1, echo=TRUE, out.width = "50%", fig.align = "default"}
+# scatter plot of hp and mpg
+ggplot(mtcars, mapping = aes(x = hp, y = mpg)) +
+  geom_point()
+
+# convert variable cylinder into a categorical variable
+mtcars$cyl <- as.factor(mtcars$cyl)
+
+# scatter plot with added color and shape by cylinder
+ggplot(mtcars, mapping = aes(x = hp, y = mpg, color =cyl)) +
+  geom_point(aes(shape = cyl))
+```
+
+
+```{r plot1_fig_export, echo=F}
+# scatter plot of hp and mpg
+fig_1a <- ggplot(mtcars, mapping = aes(x = hp, y = mpg)) +
+  geom_point() 
+
+
+# scatter plot with added color and shape by cylinder
+fig_1b <-ggplot(mtcars, mapping = aes(x = hp, y = mpg, color =cyl)) +
+  geom_point(aes(shape = cyl))
+
+ggsave(fig_1a, file = "manuscript_figures/fig_1a.png", height = 6, width = 9, dpi = 600)
+ggsave(fig_1b, file = "manuscript_figures/fig_1b.png", height = 6, width = 9, dpi = 600)
+```
+
+
+In the next example, we add more geometric layers (Figure X). By default, a geometric layer inherits the aesthetic attributes specified in `gglot(data, aes())`. To change those attributes, one needs to provide specific attributes for that geometric layer. In the first two plots, note how the presence or absence of color attribute specification in `ggplot(data, aes())` implies different color attribute specifications in `geom_smooth()`. The third plot contains an example of fixed aesthetic attributes that do not depend on data, which is specified outside `aes()`. Also, one can specify a new dataset for a geometric layer; for example, the third plot contains a layer based on a subset of the data.
+
+```{r plot2, echo=TRUE, out.width = "33%", fig.align = "default"}
+# add a layer of linear model fit for each cylinder type
+ggplot(mtcars, aes(x = hp, y = mpg, color = cyl)) +
+  geom_point(aes(shape = cyl)) +
+  geom_smooth(method = lm)
+
+# add a layer of smooth fit across all cylinder types
+ggplot(mtcars, aes(x = hp, y = mpg)) +
+  geom_point(aes(shape = cyl, color = cyl)) +
+  geom_smooth()
+
+# add a layer of large yellow dots to indicate automatic transmission
+ggplot(mtcars, aes(x = hp, y = mpg)) +
+  geom_point(data = filter(mtcars, am==0), color = "yellow", size = 5) +
+  geom_point(aes(shape = cyl, color = cyl)) +
+  geom_smooth()
+```
+
+```{r plot2_fig_export, echo=F}
+# add a layer of linear model fit for each cylinder type
+fig_2a <- ggplot(mtcars, aes(x = hp, y = mpg, color = cyl)) +
+  geom_point(aes(shape = cyl)) +
+  geom_smooth(method = lm)
+
+# add a layer of smooth fit across all cylinder types
+fig_2b <- ggplot(mtcars, aes(x = hp, y = mpg)) +
+  geom_point(aes(shape = cyl, color = cyl)) +
+  geom_smooth()
+
+# add a layer of large yellow dots to indicate automatic transmission
+fig_2c <- ggplot(mtcars, aes(x = hp, y = mpg)) +
+  geom_point(data = filter(mtcars, am==0), color = "yellow", size = 5) +
+  geom_point(aes(shape = cyl, color = cyl)) +
+  geom_smooth()
+
+ggsave(fig_2a, file = "manuscript_figures/fig_2a.png", height = 6, width = 9, dpi = 600)
+ggsave(fig_2b, file = "manuscript_figures/fig_2b.png", height = 6, width = 9, dpi = 600)
+ggsave(fig_2c, file = "manuscript_figures/fig_2c.png", height = 6, width = 9, dpi = 600)
+
+```
+
+Additionally, a `facet_wrap()` or `facet_grid()` layer allows one to split the data into subsets by a categorical variable(s) and generate subset data plots (Figure X);
+```{r plot3, echo=TRUE}
+# add a character variable for transimission type
+mtcars$am_char <- recode(c(mtcars$am), "0" = "automatic", "1" = "manual")
+
+# plot subsets of data by transmission type
+ggplot(mtcars, aes(x = hp, y = mpg)) +
+  geom_point(aes(shape = cyl, color = cyl)) +
+  facet_wrap( ~ am_char)
+
+#  plot subsets of data by transmission type and number of gears
+ggplot(mtcars, aes(x = hp, y = mpg)) +
+  geom_point(aes(shape = cyl, color = cyl)) +
+  facet_grid(gear ~ am_char)
+```
+
+
+```{r plot3_export, echo=F}
+# plot subsets of data by transmission type
+fig_3a <- ggplot(mtcars, aes(x = hp, y = mpg)) +
+  geom_point(aes(shape = cyl, color = cyl)) +
+  facet_wrap( ~ am_char)
+
+#  plot subsets of data by transmission type and number of gears
+fig_3b <- ggplot(mtcars, aes(x = hp, y = mpg)) +
+  geom_point(aes(shape = cyl, color = cyl)) +
+  facet_grid(gear ~ am_char)
+
+ggsave(fig_3a, file = "manuscript_figures/fig_3a.png", height = 6, width = 9, dpi = 600)
+ggsave(fig_3b, file = "manuscript_figures/fig_3b.png", height = 6, width = 9, dpi = 600)
+```
+
+Various cosmetic adjustments can be specified through additional layers that control coordinate attributes (*scale* and *coord*) and other plot graphics attributes (*labs*, *theme*, and *guides*) as demonstrated in Figure X.
+
+```{r plot_more, echo=TRUE, out.width = "50%", fig.align = "default"}
+# change the displayed values on the y-axis
+ggplot(mtcars, aes(x = hp, y = mpg)) +
+  geom_point(aes(shape = cyl, color = cyl)) +
+  scale_y_continuous(breaks = seq(10, 36, by = 4))
+
+# map in log10 scale
+ggplot(mtcars, aes(x = hp, y = mpg)) +
+  geom_point(aes(shape = cyl, color = cyl)) +
+  scale_x_log10() + scale_y_log10()
+
+# change theme to black and white and overwrite axis labels
+ggplot(mtcars, aes(x = hp, y = mpg)) +
+  geom_point(aes(shape = cyl, color = cyl)) +
+  theme_bw(base_size = 25) + labs(x = "Horse power", y = "Miles per gallon")
+
+# overwrite the *joint legend* for color and shape attributes
+ggplot(mtcars, aes(x = hp, y = mpg)) +
+  geom_point(aes(shape = cyl, color = cyl)) +
+  guides(
+    color = guide_legend(title ="cylinder", override.aes = list(size = 4)),
+    shape = guide_legend(title ="cylinder", override.aes = list(size = 4))
+    )
+```
+
+```{r plot_more_export, echo=F}
+# change the displayed values on the y-axis
+fig_4a <- ggplot(mtcars, aes(x = hp, y = mpg)) +
+  geom_point(aes(shape = cyl, color = cyl)) +
+  scale_y_continuous(breaks = seq(10, 36, by = 4))
+
+# map in log10 scale
+fig_4b <- ggplot(mtcars, aes(x = hp, y = mpg)) +
+  geom_point(aes(shape = cyl, color = cyl)) +
+  scale_x_log10() + scale_y_log10()
+
+# change theme to black and white and overwrite axis labels
+fig_4c <- ggplot(mtcars, aes(x = hp, y = mpg)) +
+  geom_point(aes(shape = cyl, color = cyl)) +
+  theme_bw(base_size = 25) + labs(x = "Horse power", y = "Miles per gallon")
+
+# overwrite the *joint legend* for color and shape attributes
+fig_4d <- ggplot(mtcars, aes(x = hp, y = mpg)) +
+  geom_point(aes(shape = cyl, color = cyl)) +
+  guides(
+    color = guide_legend(title ="cylinder", override.aes = list(size = 4)),
+    shape = guide_legend(title ="cylinder", override.aes = list(size = 4))
+    )
+
+ggsave(fig_4a, file = "manuscript_figures/fig_4a.png", height = 6, width = 9, dpi = 600)
+ggsave(fig_4b, file = "manuscript_figures/fig_4b.png", height = 6, width = 9, dpi = 600)
+ggsave(fig_4c, file = "manuscript_figures/fig_4c.png", height = 6, width = 9, dpi = 600)
+ggsave(fig_4d, file = "manuscript_figures/fig_4d.png", height = 6, width = 9, dpi = 600)
+
+```
+
+The next set of figures provides an example of adding a data label layer (Figure X) and an example of histograms and bar plots (Figure X).
+
+```{r plot_more2, echo=TRUE,  out.width = "50%", fig.align = "default"}
+mtcars$car_model <- rownames(mtcars)
+
+# add labels of car model for cars that have either hp > 200 or mpg > 25
+ggplot(mtcars, aes(x = hp, y = mpg)) +
+  geom_point(aes(shape = cyl, color = cyl)) +
+  ggrepel::geom_label_repel(aes(label = car_model), 
+                            data = filter(mtcars, hp > 200 | mpg > 25))
+
+# example of boxplot
+ggplot(mtcars, aes(x = am_char, y = wt)) +
+  geom_boxplot() +
+  geom_label_repel(aes(label = car_model), 
+                   data = filter(mtcars, wt > 4.5 | wt < 3, am==0))
+```
+
+
+```{r plot_more2_export, echo=F}
+update_geom_defaults("label_repel", list(label.size = 1))
+
+# add labels of car model for cars that have either hp > 200 or mpg > 25
+fig_5a <- ggplot(mtcars, aes(x = hp, y = mpg)) +
+  geom_point(aes(shape = cyl, color = cyl)) +
+  ggrepel::geom_label_repel(aes(label = car_model), size= 5,
+                            data = filter(mtcars, hp > 200 | mpg > 25))
+
+# example of boxplot
+fig_5b <-ggplot(mtcars, aes(x = am_char, y = wt)) +
+  geom_boxplot() +
+  geom_label_repel(aes(label = car_model), size= 5,
+                   data = filter(mtcars, wt > 4.5 | wt < 3, am==0))
+
+ggsave(fig_5a, file = "manuscript_figures/fig_5a.png", height = 6, width = 9, dpi = 600)
+ggsave(fig_5b, file = "manuscript_figures/fig_5b.png", height = 6, width = 9, dpi = 600)
+```
+
+
+```{r, plot_more3.1, echo=TRUE,  out.width = "50%", fig.align = "default"}
+
+# examples of histograms
+ggplot(mtcars, aes(x = wt, fill = am_char)) +
+  geom_histogram(binwidth = .75)
+
+ggplot(mtcars, aes(x = wt, color = am_char)) +
+  geom_freqpoly(binwidth = .75, position="dodge", size = 2)
+```
+
+
+```{r plot_more3.2,  echo=TRUE, out.width = "33%", fig.align = "default"}
+# examples of barplots
+ggplot(mtcars, aes(x = cyl, fill = am_char)) + geom_bar()
+ggplot(mtcars, aes(x = cyl, fill = am_char)) + geom_bar(position = "dodge")
+ggplot(mtcars, aes(x = cyl, fill = am_char)) + geom_bar(position = "fill")
+```
+
+
+```{r, plot_more3_export, echo=F}
+
+# examples of histograms
+fig_6a <- ggplot(mtcars, aes(x = wt, fill = am_char)) +
+  geom_histogram(binwidth = .75)
+
+fig_6b <- ggplot(mtcars, aes(x = wt, color = am_char)) +
+  geom_freqpoly(binwidth = .75, position="dodge", size = 2)
+
+fig_6c <- ggplot(mtcars, aes(x = cyl, fill = am_char)) + geom_bar()
+fig_6d <- ggplot(mtcars, aes(x = cyl, fill = am_char)) + geom_bar(position = "dodge")
+fig_6e <- ggplot(mtcars, aes(x = cyl, fill = am_char)) + geom_bar(position = "fill")
+
+ggsave(fig_6a, file = "manuscript_figures/fig_6a.png", height = 6, width = 9, dpi = 600)
+ggsave(fig_6b, file = "manuscript_figures/fig_6b.png", height = 6, width = 9, dpi = 600)
+ggsave(fig_6c, file = "manuscript_figures/fig_6c.png", height = 6, width = 9, dpi = 600)
+ggsave(fig_6d, file = "manuscript_figures/fig_6d.png", height = 6, width = 9, dpi = 600)
+ggsave(fig_6e, file = "manuscript_figures/fig_6e.png", height = 6, width = 9, dpi = 600)
+```
+
+# Data exploration with `dplyr`
+
+This section reviews core functions for the data transformation with `dplyr` and demonstrates its use with U.S. agriculture data.
+
+Let us begin with a consideration for why “exploring data” is so important and why tools of data transformation matter. Consider the following; one can transform a dataset through creating new variables, selecting specific subsamples, sorting or grouping data, collapsing data into group-level statistics, or any sequential combination of those operations. And perhaps when combined with some data visualization, by chance, the transformed dataset may reveal new aspects of the data. – So what? Is there anything surprising in this? We do see a powerful kernel of truth in it.
+
+Let us put it in other words. Only after a particular combination of data transformations is performed, may certain aspects of the data be revealed to us. That prompts subsequent questions such as, ''How do we know which combinations of data transformation to perform?'' and ''How do we know whether we have tried all data transformations that could reveal all interesting things about the data?'' A simple answer to both questions is, ''We don’t. But, we can try our best.'' This is precisely why the tools of EDA matter. The easier and the simpler the tools to use, the more frequently we use them and the more thoroughly we explore the data. And the power of data visualization is multiplied by the ability and the agility to transform the data at hand.
+
+Now, this may sound a bit peculiar, but the tools of `dplyr` package can make one feel that he or she is interacting with data. Those tools enable one to act nimbly, explore, and understand the data in such ways we find it proper to describe it as interacting with the data rather than merely transforming it. Before we explain why that is the case, let us introduce six key functions in the dplyr package:
+
+
+
+* `filter()`: extracts rows (observations) by logical vectors.
+
+* `select()`: extracts columns (variables) by column names.
+
+* `group_by()`: assigns rows into groups by column names.
+
+* `mutate()`: creates new variables in a data frame.
+
+* `summarise()`: collapses a data frame into summary statistics.
+
+* `arrange()`: sorts row ordering based on column names.
+
+
+These names are self-descriptive of their functions; `filter()` makes a subset of a dataset; and `select()` keeps selected variables; `group_by()` creates a grouped data frame, which enables subsequent computations in `mutate()` and `summarise()` to be performed within each group; `mutate()` creates new variables by applying direct arithmetic operations, canned functions, user-defined functions to existing variables; `summarise()` collapses the data into statistics through canned functions or user-defined functions; `arrange()` sorts the data. These functions can be combined in any order to accomplish a desired data transformation. To give a flavor of sequentially combined tasks, for example, one can use `arrange()`to sort a subset of data created by `filter()` or sort grouped summary statistics created by `group_by()` and then `summarise()`.
+
+<br>
+
+```{r stata_comparison, echo=FALSE}
+# results='asis',
+tribble(
+  ~dplyr, ~Stata,
+  "filter(exp1, exp2, ..)", "[if] [in] exp / keep if exp",
+  "select(varname1, varname2, ..)", "keep varlist",
+  "arrange(varname1, varname2, ..)", "sort varlist",
+  "mutate(newvar1 = exp1, newvar2 = exp2, ..)", "generate/egen newvar = exp",
+  "summarise(newvar1 = exp1, newvar2 = exp2, ..)", "collapse [(stat) varlist]",
+  "group_by(varname1, varname2,..)", "egen .., group(varlist) / collapse .., by(varlist)"
+) %>%
+  gt() %>%
+  tab_header(title="Comparable Commands") %>%
+             # label="tab:tab1") %>%
+  tab_options(table.width = 750)
+  # kable(#"latex", booktabs=T,
+  #   col.names = c("dplyr", "STATA"))# ,
+  #   #caption = "Comparable Commands")
+```
+
+<br>
+
+For a reference, Table 1 provides a comparison of these functions with the corresponding commands in Stata. Most applied economists would be very familiar with these data transformations and hence would not be impressed by the `dplyr` functions per se. Here, we offer three reasons for why these functions can be perceived as more powerful than the corresponding functions in other programs such as Stata.
+
+First, the `dplyr` functions are designed to be sequentially combined via *a pipe operator* (`%>%`), which makes the sequencing very smooth and natural to code. For each of the functions above takes a data frame object in the first argument and returns a data frame object, and this allows for piping, i.e. applying functions sequentially by passing the output of one function into the first argument of another. For example, `func3(func2(func1(data,...), ...), ...)` can be rewritten as `data %>% func1(...) %>% func2(...) %>% func3(...)`. Piping makes R code more readable and breaks down a complex data manipulation into a sequence of simple steps. Notably, we can read a sequence of operations in plain English by substituting `%>%` symbol as *then*; for example, start with the data, then apply `func1(...)`, then `func2(...)`, and then `func3(..)`. This makes data exploration approachable (easy to start), expandable (easy to add on), and even rewarding (easy to accomplish complex data transformations successfully).
+
+Second, the simplicity in needing to remember just six functions is empowering. These functions condense the essence of data transformations needed for exploring data. Remembering these functions and piping them allows one to perform a myriad of data transformations without dedicating much brain power to formulating the instructions via coding.
+
+Third, R’s data management environment is conducive to performing a series of data transformation and visualization without any commitment to altering the working copy of the data. R separately handles the task of transforming data from the task of saving the transformed data under a given name. Piping allows one to execute a series of data transformations and visualization task without needing to overwrite the working dataset.  When it is desirable to save transformed data for, for instance, creating different data summaries or using them in subsequent calculations, it is straightforward to keep multiple datasets in the working environment of R (i.e., just give a new name).
+
+Together, one can approach data exploration through iterative trials of data transformations and visualizations through subsetting, grouping, sorting, variable generation, and variable summaries. Each iteration, sparked by an inquisitive hypothesis, offers a potential to reveal new aspects of the data. An interesting finding in one inquiry, in the form of systematic patterns, correlations, anomalies, and outliers in the data, can lead to another line of inquiry. Such improvisations can make one feel that he or she is in fact “interacting” with the data. Thus, compared to a program like Stata, the combination of these EDA tools and the features of R itself can give one an increased sense of confidence and control to explore the data at hand.
+
+
+
+## Who are the farmers?
+
+We now move to our demonstrations with real data. We examine [US Census of Agriculture, 2017](https://www.nass.usda.gov/Publications/AgCensus/2017/index.php), for which various summary data are publicly available at the country, state, and county levels. For convenience, the downloaded data file is here separated for national-level data `us17`, state-level data `state17`, and county-level data `county17`. For `us17`, specifying some variables in columns by `select()` and printing the first several rows yields;
+
+
+```{r ag_census_load}
+us17 %>% select(census_table, Sector, Commodity, Item, geog_level, Value) %>% print(n=5)
+```
+
+Note that the national level dataset alone contains over 80,000 rows. The state or county level dataset will contain far more data points. To locate the variable of interest in a large dataset like this, it is essential to have some understanding of its data structure. Two useful approaches here are to (1) become familiar with [Quick Stats 2.0](https://quickstats.nass.usda.gov/), with which these datasets are consistently organized and (2) scan through published Census of Agriculture Tables for its contents and organization.
+
+Suppose that we are interested in the prevalence of small and non-small farms (for the sake of discussion, say, farms with less than $100,000 of production revenues and those with higher revenues). The information needed for this is found in Table 2 of the US and State census tables. We can extract the relevant information by specifying the table number in `filter()` and inspecting unique entries in `Item` column;
+
+
+```{r ag_census_inspect1}
+# find the relevant Item
+us17 %>% filter(census_table==2) %>%
+  select(Item) %>% unique()
+```
+
+The information we need is a cross tabulation between `Item` being ‘COMMODITY TOTALS - OPERATIONS WITH SALES’ and `Class`, two variables that contain the number of farms and the information about farm sales class. We use `filter()` to pinpoint the data we are seeking.
+
+```{r ag_census_inspect1.2}
+# find the relevant Item and Class
+farm_class_US <- us17 %>%
+    filter(
+      census_table==2,
+      grepl("COMMODITY TOTALS - OPERATIONS WITH SALES", Item),
+      !is.na(Class)
+    ) %>% select(Class, Value)
+
+farm_class_US
+```
+
+```{r ag_census_inspect1.3, echo=F}
+farm_class_county <- county17 %>%
+    filter(
+      census_table==2,
+      grepl("COMMODITY TOTALS - OPERATIONS WITH SALES", Item),
+      !is.na(Class)
+    ) %>% select(Class) %>% unique()
+
+# farm_class_county
+```
+
+One can apply similar operations to the state or county level data. It may be noted that while the national dataset provides statistics for the highest sales class of \$5,000,000 or more, the state- and county-level datasets aggregate all sales classes above \$1,000,000 and above \$500,000 respectively.
+
+Let’s turn to county-level data. As mentioned above, say we want to count farms by a binary sales-class of small farms (label `S`) vs not-small farms (label `NS`), meaning that we make a county-level summary by a new sales-class definition. We do this by selecting relevant data, creating a new class variable (by comparing the sale class in the data to user-defined reference `class_S` that contains a vector of class names for those under $100,000 in sales), and summarizing the number of farms by county and this binary sales-class;
+
+
+```{r ag_census_inspect2.1a, echo=F}
+# add a minimum sales value in each class value for later references
+farm_class_county <- farm_class_county %>%
+    mutate(
+      tmp = gsub(",","", Class),
+      # extract the lower range in string "FARM SALES: (10,000 TO 19,999 $)"
+      Class_min = str_extract(tmp, "\\d+.") %>% as.numeric(),
+      # set the lower range to be zero for "FARM SALES: (LESS THAN 1,000 $)"
+      Class_min = ifelse(grepl("\\(LESS THAN 1000", tmp), 0, Class_min)
+      ) %>%
+  arrange(Class_min) %>%
+  select(Class, Class_min)
+
+class_S <- farm_class_county$Class[farm_class_county$Class_min < 10^5]
+```
+
+```{r ag_census_inspect2.1b, echo=T}
+# create a new variable indicating sales < $100k and sum farms counts
+farms <- county17 %>%
+  filter(
+    census_table==2,
+    grepl("COMMODITY TOTALS - OPERATIONS WITH SALES", Item),
+    !is.na(Class), Co_name!="NULL"
+    ) %>%
+  mutate(class_S_NS = ifelse(Class %in% class_S, "S", "NS")) %>%
+  group_by(St_code, St_name, Co_code, Co_name, class_S_NS) %>%
+  summarise(Value = sum(Value, na.rm=T))
+```
+
+```{r ag_census_inspect2.2a}
+# show the top 10 county for the numbers of small farms
+farms %>% filter(class_S_NS=="S") %>% arrange(desc(Value)) %>% head(n=10)
+# show the top 10 county for the numbers of non-small farms
+farms %>% filter(class_S_NS=="NS") %>% arrange(desc(Value)) %>% head(n=10)
+```
+
+
+The output shows that the lists of top counties in farm numbers below are very different between small and non-small farms. Summing up farms within the binary sales class yields;
+```{r ag_census_inspect2.2b}
+# total number of farms by class
+farms %>% group_by(class_S_NS) %>%
+  summarise(subtotal = sum(Value, na.rm=T)) %>%
+  ungroup() %>%
+  mutate(total = sum(subtotal, na.rm=T),
+         fraction = round(subtotal/total,2))
+```
+
+Of the two million farms for which the census gathered data, roughly 1.68 million farms (82%) had less than \$100,000 in revenues. The USDA defines a farm to be ‘’any place from which \$1,000 or more of agricultural products were produced and sold, or normally would have been sold, during the census year.’’ In fact, over 600,000 farms do not have sales above \$1,000 in 2017, as shown in the first summary `farm_class_US` above.
+
+One strength of R for agricultural data analysis is to be able to produce geographical representations of data. With county-level data paired with the state-county FIPS code, it is straightforward to project the data on maps. For instance, the following sample code shows how variable `var1` in dataset `data` can be mapped at the county level;
+
+
+```{r map_code_example, eval = F}
+# merge county level data with geographic data and generate a colored map
+left_join(geo_county, data,  by =c("GEOID"="FIPS")) %>%
+    ggplot() +
+    geom_sf(aes(fill = var1)) +
+    coord_sf(datum = NA) + theme_minimal()
+```
+
+where `geo_county` contains geometry data of U.S. county boundaries (which can be replicated by downloading any county-level information of the American Community Survey with `tidycensus` package). Layer `geom_sf()` handles the geometry aesthetic and here supplies a layer that fills county shapes with different colors depending on the value of `var1`. Additional layers `coord_sf(datum = NA)` and `theme_minimal()` instruct to remove data plot graphics like axes and data plot area, giving a clean finish to the map output.
+
+Here is an example of map that shows how the number of farms varies across geography in county within the small and non-small farm classes;
+
+```{r ag_census_farms1, echo=FALSE, out.width = "100%", fig.align = "default"}
+theme_set(theme_grey(base_size = 28))
+
+breaks_farms <- c(0, 50, 100, 250, 500, 1000, 1500, 2000, Inf)
+farms <- farms %>% mutate(FIPS = paste0(St_code, Co_code)) %>%
+  my_cat_var(Value, breaks = breaks_farms)
+
+
+# map_county_data_cat(farms %>% filter(class_S_NS=="S"), # <- another version
+map_county_cat_var(farms %>% filter(class_S_NS=="S"),
+                    legend_varname = "Farms*",
+                    title = "Number of Farms with Sales Below $100k by County, 2017",
+                    caption = paste("* Farms restricted to those with below $100k in sales. \n",
+                                    "Data Source: US Census of Agriculture, 2017."))
+
+ggsave(file = "manuscript_figures/fig_7a.png", dpi = 600, width = 8, height=4)
+
+map_county_cat_var(farms %>% filter(class_S_NS=="NS"),
+                    legend_varname = "Farms*",
+                    title = "Number of Farms with Sales Above $100k by County, 2017",
+                    caption = paste("* Farms restricted to those with above $100k in sales. \n",
+                                    "Data Source: US Census of Agriculture, 2017."))
+
+ggsave(file = "manuscript_figures/fig_7b.png", dpi = 600, width = 8, height=4)
+```
+
+In addition to the raw farm numbers, the next map considers the relative prevalence of the small and non-small farms. This approach more clearly highlights the geographic concentrations of farms in different farm size classes across counties. These maps of farm population illustrate how the concept of a farm, in terms of revenue size, systematically varies across geography.
+
+```{r ag_census_farms2, echo=FALSE, out.width = "100%", fig.align = "default"}
+farms_wide <- farms %>%
+  mutate(Value_class = paste0('Value_', class_S_NS)) %>%
+  select(St_name, Co_name, FIPS, Value_class , Value) %>%
+  pivot_wider(names_from = Value_class,  values_from = Value) %>%
+  mutate(Value_total = Value_S + Value_NS,
+         ratio_S = Value_S/Value_total,
+         ratio_NS = Value_NS/Value_total)
+
+breaks_farms_ratio <- c(0, .1, .2, .3, .4, .5, .6, .75, 1)
+farms_wide <- farms_wide %>% mutate(
+  ratio_S2 = recode(ratio_S, '0' = 0.01, .missing=0.01),
+  ratio_NS2 = recode(ratio_NS, '0' = 0.01, .missing=0.01)
+  ) %>%
+  my_cat_var(ratio_S2, breaks_farms_ratio) %>%
+  my_cat_var(ratio_NS2, breaks_farms_ratio)
+
+
+farms_wide  %>% filter( Value_total >= 30) %>%
+  map_county_cat_var(
+    var = cat_ratio_S2,
+    legend_varname = "Ratio*",
+    title = "Ratio of Farms with Sales Below $100k by County, 2017",
+    caption = paste("* County with at least 30 Farms. \n",
+                    "Data Source: US Census of Agriculture, 2017."))
+
+ggsave(file = "manuscript_figures/fig_8a.png", dpi = 600, width = 8, height=4)
+
+farms_wide  %>% filter( Value_total >= 30) %>%
+  map_county_cat_var(
+    var = cat_ratio_NS2,
+    legend_varname = "Ratio*",
+    title = "Ratio of Farms with Sales Above $100k by County, 2017",
+    caption = paste("* County with at least 30 Farms. \n",
+                    "Data Source: US Census of Agriculture, 2017."))
+
+ggsave(file = "manuscript_figures/fig_8b.png", dpi = 600, width = 8, height=4)
+```
+
+
+
+We next turn to differences across different farming industries. As in the previous example, say we want to see how the concept of a farm differs across industries. We again examine the distributions of farm numbers and sales values this time by industry. In the first example, we show Sankey flow charts (we used `flipPlots` package; Figures X and X), which illustrate the contributions of individual components to the total like various streams combining into a big river. Here, we add an intermediate layer that represents the subtotals by farm sales class. This illustrates relationships among the farm numbers and sales values through the lens of farm size. For this purpose, we consider four levels of sales classes; marginal (less than \$10 K), small (\$10 K to \$100 K), medium (\$100 K to \$1 M), and large (greater than \$1 M).
+
+![Farm numbers by sales and industry](farms_by_size_industry.png){width=800px}
+
+
+![Sales contributions by farm sale class and industry](sales_by_size_industry.png){width=800px}
+
+Figure X shows that nearly 60% of the farms in the census are marginal producers with less than \$10 K in sales. Anyone who uses statistical information in the agricultural census must be aware of how the presence of these marginal producers impact statistics like the averages per farm or per operator. On the other hand, the large farms with exceeding \$ 1 M in sales revenues accounted for roughly 4% of the farm population but produced nearly 70% (\$ 268 B) of agricultural products in sales values (Figure X and X).
+About 88% of the farms are classified as the producers of grain, beef cattle, ‘other crop’, or ‘other animal’ products (suggesting that only a small fraction of farms produce poultry and eggs, hogs, dairy, fruit and nuts, and vegetables). The majority of the medium-scale farms are grain producers. Grain production is unique in that its sales are not dominated by large-scale farms, as its total sales contribution is roughly equally split between the medium- and large-sized farms.
+
+
+
+## How does farming differ across states and industries?
+
+We next explore the characteristics of farm economies using industry statistics across states. It is common to see states ranked by their sale values in some industry. Here consider a slightly different comparison in which we visualize the relative size of state’s crop and livestock sectors. By selecting certain variables from the state-level census data, we constructed dataset `df_NAICS` organized by state and North American Industry Classification System (NAICS) code. In the following code example, we aggregate the sales revenue by state and NAICS category (i.e., crop or livestock), converting the dataset into the ‘wide’ format by distributing the sales value into ‘Crop’ and ‘Livestock’ columns, and plot the data with the annotation of state names if the state exceeds certain sales value thresholds;
+
+```{r  ag_census_NAICS1, echo=T, out.width = "100%"}
+theme_set(theme_grey(base_size = 13))
+
+# see "ag_examples_A.R" for creating dataset "df_NAICS"
+load(file="datasets/df_NAICS.RData")
+
+
+crop_vs_animal <-
+  df_NAICS %>% filter(!is.na(NAICS_cat)) %>%
+  group_by(St_code, St_name, USDA_region, NAICS_cat) %>%
+  summarise(revenue_sales = sum(revenue_sales, na.rm=T)/10^9) %>%
+  pivot_wider(names_from = NAICS_cat, values_from = revenue_sales)
+
+crop_vs_animal %>%
+  ggplot(aes(x = Crop, y = Livestock, color = USDA_region, shape = USDA_region)) +
+  geom_point() +
+  geom_label_repel(aes(label = St_name), show.legend = FALSE, label.size = .5,
+            data = crop_vs_animal %>% filter(Crop > 6 | Livestock > 7)) +
+  labs(x = "Crop Agriculture Revenue, $ billion",
+      y = "Livestock Agriculture Revenue, $ billion",
+      caption = "Data Source: US Census of Agriculture, 2017.")
+```
+
+```{r fig_11_export, echo=F}
+ggsave(file = "manuscript_figures/fig_11.png", dpi = 600, height = 4, width = 8)
+```
+
+
+It is clear that California is an exceptionally large agricultural state in both crop and livestock production. Also, one could see Illinois, Washington, and North Dakota are specialized in crop production; Texas, Kansas, North Carolina, and Wisconsin are specialized in livestock production, and Iowa, Nebraska, and Minnesota are relatively balanced in the revenues of crop and animal agriculture (Figure X).
+
+In gathering various NASS and census data, it is convenient to directly download via API, for example, using `rnassqs` package. The following is an example for obtaining the aggregate land asset value and net farm income for the poultry industry from the census data;
+
+```{r rnassqs_example, echo=TRUE, eval=FALSE}
+library(rnassqs)
+NASSQS_TOKEN <- "C9B668A9-3062-3CE5-96B8-2D6D1AC432BF" # use your token
+nassqs_auth(key = NASSQS_TOKEN)
+
+# check asset and profitability of poultry sector
+asset_profit_poultry <- nassqs(list(
+  source_desc = "census",
+  agg_level_desc = "national",
+  domaincat_desc= "NAICS CLASSIFICATION: (1123)",
+  short_desc = c("AG LAND, INCL BUILDINGS - ASSET VALUE, MEASURED IN $",
+                 "INCOME, NET CASH FARM, OF OPERATIONS - NET INCOME, MEASURED IN $"),
+  year = c(2012, 2017))) %>%
+  select(sector_desc, short_desc, state_alpha, year, commodity_desc, Value)
+
+# note: only 2012 and 2017 data are available
+asset_profit_poultry
+```
+
+
+Next, say we ask, “what does it take for a farm to thrive?” To explore this question, it is instructive to compare the average utilization of capital and labor per operator across states and agricultural industries. Here we define capital as the sum of the asset value of land and buildings and that of machinery for crop farming. For livestock farms, we add the value of livestock inventory for poultry (broiler chickens, non-broiler chickens, and turkey), hogs, dairy cows, and beef cattle using NASS survey and census statistics. For the poultry industry, we further add an estimated value of facility (for processing, hatchery, and feed mills that are largely owned by integrators) at the estimated rate of $3.5 per chicken-equivalent production (using the approximate rate based on [this article](https://www.acppubs.com/articles/7398-costco-poultry-processing-plant-to-boost-nebraska-economy)). Note that these asset values are only a crude approximation.
+
+```{r ag_census_NAICS2, echo=FALSE, out.width = "100%"}
+# see "ag_examples_A.R" for creating dataset "df_NAICS_simple"
+load(file="datasets/df_NAICS_simple.RData")
+
+
+df_NAICS_simple %>% filter(NAICS_cat=="Crop", revenue_sales > .01) %>%
+  ggplot(aes(x = hired_to_unpaid, y = asset_per_unpaid,
+           color=NAICS_simple,
+           size = revenue_sales)) + geom_point(alpha=.5) +
+  geom_label_repel(aes(label = St_name), size=3, show.legend = FALSE,
+                   data = df_NAICS_simple %>%
+                     filter(NAICS_cat=="Crop", revenue_sales > .01) %>%
+                     filter(hired_to_unpaid > 8 | asset_per_unpaid > 8 |
+                              revenue_sales > 8)) +
+  guides(color =guide_legend(title = "Industry Category"),
+         size = guide_legend(title = "Revenue, $ billion")) +
+  labs(x = "Hired worker per operator, persons",
+       y = "Agricultural asset per operator, $ million",
+       caption = paste(
+         "Data Source: US Census of Agriculture, 2017."))
+
+ggsave(file = "manuscript_figures/fig_12a.png", dpi = 600, height = 4, width = 8)
+
+
+df_NAICS_simple %>% filter(NAICS_cat=="Livestock", revenue_sales > .01) %>%
+  ggplot(aes(x = hired_to_unpaid, y = asset_per_unpaid,
+             color=NAICS_simple,
+             size = revenue_sales)) + geom_point(alpha=.5) +
+  geom_label_repel(aes(label = St_name), size=3, show.legend = FALSE,
+                   data = df_NAICS_simple %>%
+                     filter(NAICS_cat=="Livestock", revenue_sales > .01) %>%
+                     filter(hired_to_unpaid > 10 | asset_per_unpaid > 8 |
+                              revenue_sales > 8)) +
+  guides(color =guide_legend(title = "Industry Category"),
+         size = guide_legend(title = "Revenue, $ billion")) +
+  labs(x = "Hired worker per operator, persons",
+       y = "Agricultural asset per operator, $ million",
+       caption = paste(
+         "Data Source: US Census of Agriculture & NASS Survey, 2017."))
+
+ggsave(file = "manuscript_figures/fig_12b.png", dpi = 600, height = 4, width = 8)
+
+```
+
+Grain production is more capital intensive than other types of crop farming, whereas fruit and nut production tend to be more labor intensive. In most states, grain producers are likely to require over \$ 2 to 5 M of capital asset, for which much of the value can be attributed to the value of the land. The data points for the ‘other crop’ category are clustered together near zero except California, and the reason may be that this category contains many marginal producers (less than \$10 K in sales).
+
+For livestock agriculture, it is clear that cattle feedlot production is capital intensive, in which much of the capital comes from the value of cattle inventory. In contrast, the data points for cattle ranch operations are clustered near zero. Indeed, beef producers are very different between ranch and feedlot operations since a typical feedlot manages much larger herds of cattle than a typical ranch. Dairy production is both capital and labor intensive; the average dairy operator in California, Nevada, New Mexico, Idaho, and Texas employs over \$ 10 M of assets and near 20 hired workers or more. In poultry and egg production, the notion of a farm operator itself is rather different because many producers operate under contracts with larger integrators such as Tyson, Pilgrim’s Pride, and Perdue. In 2016, the top five integrators had over 60% of market share in the poultry and egg industry.
+
+In the plot above, we see that the data points for some type of operations like grain, dairy, and cattle feedlot production visually line up on underlying linear trends. We can obtain an OLS estimate of this trend using `lm()` function for linear models;   
+```{r ag_census_NAICS2b, echo=T}
+# OLS estimation by lm(.) function
+# Regress asset dollars on hired labor for dairy data
+lm( formula = asset_per_unpaid ~ hired_to_unpaid,
+    data  = df_NAICS_simple %>% 
+      filter(revenue_sales > .01, 
+             NAICS_simple == "Dairy")
+  ) %>% summary()  
+```
+`lm()` will produce a linear model class object, on which applying `summary()` function gives an informative output with a table of coefficients and common goodness-of-fit statistics. Here, we see that for each hired labor, the estimated slope coefficient implies that a typical dairy farm would employ \$377,000 worth of capital asset per hired farm worker.  Let's add a few more variables to this regression such as regional fixed effects and a debt-to-income ratio;     
+
+```{r ag_census_NAICS2c, echo=T}
+# Add more variables: region dummies, debt-to-income ratio 
+lm( formula = asset_per_unpaid ~ 
+      hired_to_unpaid + USDA_region + I(debt_at_5pct/revenue_sales),
+    data  = df_NAICS_simple %>% 
+      filter(revenue_sales > .01, 
+             NAICS_simple == "Dairy")
+  ) %>% summary()  
+```
+`lm()` treats character-string variables as factor/categorical variables and inserts indicator dummies for each group. Also, to create a new variable from manupulating existing variables, one can usev `I(.)` operator inside the linear model formula. The estimate shows that after accounting for regional differences in the intercept and the relative use of debt to sales revenues, the average dairy farm capital asset is about \$301,000 per hired worker.  
+
+
+Lastly, we briefly turn to the capital structure and return on asset (Figure X). Keep in mind that agricultural commodity prices and hence profitability fluctuate from year to year. Some states had a particularly profitable year in vegetable, fruit, and nut production in 2017. The poultry and egg industry also had a particularly profitable year (note: the industry’s net income has indeed doubled from 2012 to 2017 according to the Census of Agriculture). Dairy producers in states with large-scale dairy operations attained relatively high returns, while they were also highly leveraged.
+
+```{r ag_census_NAICS3, echo=F, out.width = "100%"}
+
+df_NAICS_simple %>% filter(NAICS_cat=="Crop", revenue_sales > .01) %>%
+  ggplot(aes(x = debt_to_asset_ratio, y = return_on_asset,
+             color=NAICS_simple,
+             size = revenue_sales)) + geom_point(alpha=.5) +
+  geom_label_repel(aes(label = St_name), size=3, show.legend = FALSE,
+                   data = df_NAICS_simple %>%
+                     filter(NAICS_cat=="Crop", revenue_sales > .01) %>%
+                     filter(debt_to_asset_ratio > .15 | return_on_asset > .08 |
+                              revenue_sales >5))  +
+  guides(color =guide_legend(title = "Industry Category"),
+         size = guide_legend(title = "Revenue, $ billion")) +
+  scale_y_continuous(labels = scales::percent) +
+  labs(x = "Debt to asset ratio",
+       y = "Return on asset",
+       caption = paste(
+         "Data Source: US Census of Agriculture, 2017."))
+
+ggsave(file = "manuscript_figures/fig_13a.png", dpi = 600, height = 4, width = 8)
+
+
+df_NAICS_simple %>% filter(NAICS_cat=="Livestock", revenue_sales > .01,
+                           return_on_asset < .4) %>% # omit outliers over 40% ROA
+  ggplot(aes(x = debt_to_asset_ratio, y = return_on_asset,
+             color=NAICS_simple,
+             size = revenue_sales)) + geom_point(alpha=.5) +
+  geom_label_repel(aes(label = St_name), size=3, show.legend = FALSE,
+                   data = df_NAICS_simple %>%
+                     filter(NAICS_cat=="Livestock", revenue_sales > .01) %>%
+                     filter(debt_to_asset_ratio > .25 | return_on_asset > .25 |
+                              revenue_sales >5, return_on_asset < .4)) +
+  guides(color =guide_legend(title = "Industry Category"),
+         size = guide_legend(title = "Revenue, $ billion")) +
+  scale_y_continuous(labels = scales::percent) +
+  labs(x = "Debt to asset ratio",
+       y = "Return on asset",
+       caption = paste(
+         "Data Source: US Census of Agriculture & NASS Survey, 2017."))
+
+ggsave(file = "manuscript_figures/fig_13b.png", dpi = 600, height = 4, width = 8)
+
+```
+
+
+#	Analytical Demonstration
+
+```{r reg_data_load, echo=F, include=FALSE}
+# see "ag_examples_B.R" for creating dataset "df_pop_grain.RData"
+load(file= "df_pop_grain.RData")
+
+# create a FIPS indicator for having a non-missing data in 1982
+idx_data_exist_82 <- df_pop_grain %>% filter(Year == 1982) %>%
+  select(FIPS, grain_prod)  %>% filter(!is.na(grain_prod)) %>%
+  select(FIPS) %>% unique()
+
+
+df_pop_grain <- df_pop_grain %>%
+  left_join(idx_data_exist_82 %>% mutate(data_exist_82 = 1)) %>%
+  group_by(Year, FIPS) %>%
+  mutate(
+    # inpute na with zero for year>1980 if data existed for the county in 1980
+    grain_prod = ifelse(!is.na(grain_prod), grain_prod,
+                       ifelse(data_exist_82 ==1 & Year > 1982, 0, NA)),
+    pop_tot = sum(pop, na.rm=T),
+    grain_prod_person = grain_prod/10^3/pop_tot
+  )
+
+df_pop_grain <- df_pop_grain %>%
+  arrange(FIPS, age_group2, Year) %>%
+  group_by(FIPS, age_group2) %>%
+  mutate(
+    pop.lag4 = dplyr::lag(pop, 4),
+    pop_ch_pct4 = ifelse(pop.lag4==0, 0, (pop - pop.lag4)/pop.lag4 * 100),
+    pop_tot.lag =  dplyr::lag(pop_tot, 1),
+    pop_tot_ch_pct =  ifelse(pop_tot.lag==0, 0, (pop_tot - pop_tot.lag)/pop_tot.lag * 100),
+    # note: population total lag is needed only for one age group, set the rest to NA
+    pop_tot.lag4 =   ifelse(age_group2!="age_0-14", NA,
+                            dplyr::lag(pop_tot, 4)),
+    pop_tot_ch_pct4 = ifelse(pop_tot.lag4==0, 0,
+                             (pop_tot - pop_tot.lag4)/pop_tot.lag4 * 100),
+    grain_prod_person.lag =  dplyr::lag(grain_prod_person, 1),
+    grain_prod.lag = dplyr::lag(grain_prod, 1),
+    grain_ch = grain_prod - grain_prod.lag,
+    grain_ch_pct = ifelse(grain_prod.lag ==0, 0, grain_ch/grain_prod.lag * 100),
+    grain_prod.lag4 = dplyr::lag(grain_prod, 4),
+    grain_ch4 = grain_prod - grain_prod.lag4,
+    grain_ch_pct4 = ifelse(grain_prod.lag4 ==0, 0, grain_ch4/grain_prod.lag4 * 100),
+    grain_prod_person.lag4 =  dplyr::lag(grain_prod_person, 4)
+  ) %>%
+  ungroup()
+
+# duplicate variables with names that are explanatory
+df_pop_grain <- df_pop_grain %>%
+  mutate(
+    pop_tot_ch_pct_72_17 = pop_tot_ch_pct4,
+    ln_grain_prod_person_1972  = log(grain_prod_person.lag4+1),
+    ln_grain_prod_1972 = log(grain_prod.lag4/10^6+1),
+    grain_ch_pct_72_17 = grain_ch_pct4,
+    ln_grain_prod_person  = log(grain_prod_person.lag+1),
+    ln_grain_prod.lag = log(grain_prod.lag/10^6+1),
+    grain_ch_pct_neg100 = 1 * grain_ch_pct==-100,
+    grain_ch_pct_0 = 1 * grain_ch_pct==0
+  )
+
+
+```
+
+For further illustrations, this section presents an example of analytical data exploration on the topic of rural population change. In particular, we investigate whether there are systematic relationships between the intensification of grain farming and rural depopulation during 1972-2017. Technical notes include; we select the data for 1972 as the beginning of this time span because the NASS survey data in 1970 have a large number of missing data points; for the data beyond 1982, we impute missing grain production values with zero if the county has a non-missing value in the 1982 data; all grain production values are expressed in 2017 dollars.
+
+We first generate two maps: one for the grain production by county in 1972 and the other for the change in grain production during 1972-2017 (Figure X). The first map also shows that much of the Midwest had highly active grain production in 1972. The second map highlights a relative decline in grain production in many parts of the country, while the Midwest and a part of the South increased their grain production.
+
+```{r reg_map1, echo=F, out.width = "100%", fig.align = "default"}
+theme_set(theme_grey(base_size = 28))
+
+breaks_1 <- c(-Inf, 0, 2.5,  5, 7.5,  10,  15, 20,  Inf)
+df_pop_grain <- df_pop_grain %>% my_cat_var(grain_prod_person, breaks_1)
+
+map_county_cat_var(df_pop_grain  %>% filter(Year == 1972,
+                                           age_group2=="age_0-14",
+                                           !is.na(cat_grain_prod_person)),
+                    var =  cat_grain_prod_person, lower_48 =T,
+                    legend_varname = "Grain Production, $1,000/person",
+                    title = "Commodity Grain Production per County Resident, 1972",
+                    caption = "Data Source: NASS. Price level is adjusted for 2017 dollars.")
+
+ggsave(file = "manuscript_figures/fig_14a.png", dpi = 600, width=8, height=4)
+
+
+breaks_2 <- c(-Inf,-75, -50, -25, 0, 50, 100, 200,  Inf)
+df_pop_grain <- df_pop_grain %>% my_cat_var(grain_ch_pct4, breaks_2)
+
+map_county_cat_var(df_pop_grain  %>% filter(age_group2=="age_0-14",
+                                           !is.na(cat_grain_ch_pct4)),
+                    var =  cat_grain_ch_pct4, lower_48 =T,
+                    var_colors = brewer.pal(8, "RdBu"),
+                    legend_varname = "Grain Production change, %",
+                    title =  "Change in Commodity Grain Production, 1972-2017",
+                    caption = "Data Source: NASS. Price level is adjusted for 2017 dollars.")
+
+ggsave(file = "manuscript_figures/fig_14b.png", dpi = 600, width=8, height=4)
+```
+
+We next map the overall population change during the same period (Figure X). It is clear that the Midwest experienced the most significant population loss as a region. The two sets of maps together appear consistent with a narrative that increased mechanization of grain production required fewer and fewer laborers, which most severely affected the population in the Midwest. [CITE SOME LITERATURE]
+
+
+```{r reg_map2, echo=F,out.width = "100%"}
+df_pop_grain <- df_pop_grain %>% my_cat_var(pop_tot_ch_pct_72_17, breaks_2)
+
+map_county_cat_var(df_pop_grain  %>% filter(!is.na(pop_tot_ch_pct_72_17)),
+                    var =  cat_pop_tot_ch_pct_72_17, lower_48 =T,
+                    legend_varname = "Population Change, %",
+                    var_colors = brewer.pal(8, "RdBu"),
+                    title = "Population change, 1972-2017",
+                    caption = "Data Source: National Cancer Institute SEER Program")
+
+ggsave(file = "manuscript_figures/fig_15.png", dpi = 600, width=8, height=4)
+```
+
+
+To further investigate the relationship between grain farming and population change, we plot county-level data. Figure X includes a data plot on raw data (on the top left) and one that is plotted in the log-scale horizontal axis and without outlier population increases of over 500% (on the top right). The latter plot appears to suggest a negative correlation between the population change and the grain production per person in 1972. This correlation may be spurious because grain production per person may be affected by declining population trends in some counties. Thus, we produce similar data plots by substituting this measure with the total grain production in the county (the bottom left) or the change in grain production for 1972-2017 (the bottom right). For the latter, the cluster of data points at -100% change represents the counties that produced some grain in 1972 and had no sales records in 2017. These data plots also suggest weak negative correlations between grain production and population change.
+
+
+```{r reg_plot1, echo=F, out.width = "50%", fig.align = "default"}
+theme_set(theme_grey(base_size = 28))
+
+df_pop_grain  %>%
+  ggplot(aes(x = grain_prod_person.lag4, y = pop_tot_ch_pct_72_17 )) +
+  geom_point(alpha=.2) +
+  labs(x = "Grain production per person in 1972, $1,000",
+       y = "Population change 1972-2017, % ") +
+  theme(axis.title =  element_text(size=24))
+
+ggsave(file = "manuscript_figures/fig_16a.png", height = 6, width = 9, dpi = 600)
+
+df_pop_grain  %>% filter(pop_tot_ch_pct_72_17 < 500) %>%
+  ggplot(aes(x = grain_prod_person.lag4 + 1, y = pop_tot_ch_pct_72_17 )) +
+  geom_point(alpha=.2) + geom_smooth() +
+  coord_trans(x = "log10") +
+  labs(x = "Grain production per person in 1972, $1,000",
+       y = "Population change 1972-2017, % ") +
+ theme(axis.title =  element_text(size=24))
+
+ggsave(file = "manuscript_figures/fig_16b.png", height = 6, width = 9, dpi = 600)
+```
+
+
+```{r reg_plot2, echo=F, out.width = "50%", fig.align = "default"}
+df_pop_grain  %>% filter(pop_tot_ch_pct_72_17 < 500) %>%
+  ggplot(aes(x = grain_prod.lag4/10^6 + 1, y = pop_tot_ch_pct_72_17 )) +
+  geom_point(alpha=.2) + geom_smooth() +
+  coord_trans(x = "log10") +
+  labs(x = "Grain production in 1972 in log-scale, $ 1 M",
+       y = "Population change 1972-2017, % ") +
+  theme(axis.title =  element_text(size=24))
+
+ggsave(file = "manuscript_figures/fig_16c.png", height = 6, width = 9, dpi = 600)
+
+
+df_pop_grain  %>% filter(pop_tot_ch_pct_72_17 < 500, grain_ch_pct4 < 500) %>%
+  ggplot(aes(x = grain_ch_pct4, y = pop_tot_ch_pct_72_17 )) +
+  geom_point(alpha=.2) +
+  geom_smooth(data = df_pop_grain  %>% filter(pop_tot_ch_pct_72_17 < 500,
+                                             grain_ch_pct4 < 500,
+                                             grain_ch_pct4!=-100))   +
+  labs(x = "Grain production change in  1972-2017, %",
+       y = "Population change 1972-2017, % ") +
+  theme(axis.title =  element_text(size=24))
+
+ggsave(file = "manuscript_figures/fig_16d.png", height = 6, width = 9, dpi = 600)
+
+```
+
+
+
+
+```{r zero_grain_map, echo=F, out.width = "50%", fig.align = "default"}
+# tmp <- left_join(geo_county, df_pop_grain,  by =c("GEOID"="FIPS")) %>%
+#   mutate(nonzero_production = grain_prod > 0)
+#
+# tmp %>% filter(Year == 2002, age_group2=="age_0-14") %>%
+#   ggplot() +
+#   geom_sf(aes(fill = nonzero_production)) +
+#   coord_sf(datum = NA) + theme_minimal() +
+#   labs(fill = "Positive grain production, 2002")
+#
+# tmp %>% filter(Year == 2017, age_group2=="age_0-14") %>%
+#   ggplot() +
+#   geom_sf(aes(fill = nonzero_production)) +
+#   coord_sf(datum = NA) + theme_minimal() +
+#   labs(fill = "Positive grain production, 2017")
+```
+
+
+
+Analytically, consider an OLS regression of the form
+$$y_{is} = \alpha_s +  \boldsymbol x_{is} \boldsymbol \beta + \varepsilon_{is}$$
+where$y_{is}$ is the change in population during 1972-2017, $\alpha_s$ state fixed effects, $\boldsymbol x_{is}$ a vector of covariates, and $\varepsilon_{is}$ an error term. For $\boldsymbol x_{is}$,  we include grain production in 1972 (either as the county total or the county total per person), the change in grain production during 1972-2017, and a dummy variable corresponding to the value of -100% changes. We estimate the above equation by linear regression model function `lm()` and summarize selected coefficients using `stargazer` package.
+
+```{r reg0, echo=F}
+# impute data pop_tot_ch_pct_72_17 >= 500 or grain_ch_pct_72_17 >=500 with NA
+df_pop_grain <- df_pop_grain  %>%
+  mutate(
+    pop_tot_ch_pct_72_17 = ifelse(pop_tot_ch_pct_72_17 < 500, pop_tot_ch_pct_72_17, NA),
+    grain_ch_pct_72_17 = ifelse(grain_ch_pct_72_17 < 500, grain_ch_pct_72_17, NA),
+  )
+
+```
+
+
+
+```{r reg1A, echo=T}
+lm_1 <- lm(pop_tot_ch_pct_72_17 ~ ln_grain_prod_person_1972 + grain_ch_pct_72_17 +
+            (grain_ch_pct_72_17==-100)  + St_name,
+          data = df_pop_grain)
+
+lm_2 <- lm(pop_tot_ch_pct_72_17 ~   ln_grain_prod_1972 + grain_ch_pct_72_17 +
+            (grain_ch_pct_72_17==-100) + St_name,
+           data = df_pop_grain)
+```
+
+
+```{r, echo=F}
+stargazer(lm_1, lm_2, type="text", keep = c("ln_grain_prod_person_1972",
+                                            "ln_grain_prod_1972",
+                                            "grain_ch_pct_72_17"),
+          add.lines = list(c("State fixed effects","Yes","Yes")))
+```
+
+The results suggest negative associations between the grain production variables and population change, while controlling for unobservable fixed factors at the state level (Table 2). In terms of magnitudes, the second model in column (2) suggest; a 10% higher grain production in 1972 is associated with an additional 0.7 % net reduction in the county population; and a 10% increase in grain production during 1972-2017 is associated with additional 0.9% net reduction in the population.
+
+To examine the geographic distribution of the errors, we add the estimation errors to the dataset by `add_residual()` function from `modelr` package;
+
+```{r reg_residual1, echo=T}
+# add model predictions, except states that have no grain production
+df_pop_grain_res <- df_pop_grain %>%
+  filter(!(St_name %in% c("CT", "DC", "MA", "ME", "NH", "RI", "VT"))) %>%
+  add_residuals(lm_1, var="resid_lm_1") %>%
+  add_residuals(lm_2, var="resid_lm_2")
+```
+
+
+```{r reg_residual2, echo=F, out.width = "100%", fig.align = "default"}
+theme_set(theme_grey(base_size = 28))
+
+breaks_3 <- c(-Inf, -75, -50, -25, 0, 25, 50, 75,  Inf)
+df_pop_grain_res <- df_pop_grain_res %>%
+  my_cat_var(resid_lm_1, breaks_3) %>%
+  my_cat_var(resid_lm_2, breaks_3)
+
+map_county_cat_var(df_pop_grain_res  %>% filter(!is.na(resid_lm_1)),
+                    var =  cat_resid_lm_1, lower_48 =T,
+                    legend_varname = "Residual",
+                    var_colors = brewer.pal(8, "RdBu"),
+                    title = "Model 'lm_1' Residual in Population Change, 1972-2017")
+
+ggsave(file = "manuscript_figures/fig_17a.png", dpi = 600, width=8, height=4)
+
+map_county_cat_var(df_pop_grain_res %>% filter(!is.na(resid_lm_2)),
+                    var =  cat_resid_lm_2, lower_48 =T,
+                    legend_varname = "Residual",
+                    var_colors = brewer.pal(8, "RdBu"),
+                    title = "Model 'lm_2' Residual in Population Change, 1972-2017")
+
+ggsave(file = "manuscript_figures/fig_17b.png", dpi = 600, width=8, height=4)
+```
+
+These errors on map (Figure X) show that the residuals from the two models are qualitatively very similar. Given the fixed effects, the residuals are not concentrated in any particular state. The counties with dark red and dark blue shades are those that experienced particularly large population declines and gains respectively, net the state-level average trends.
+
+In addition to the average effects shown above, we examine how such effects may vary across age groups. To explore this, we first map the population change for two age groups of 15-29 and 60 and older (Figure X). The first map shows that there are fewer young adults in much of the rural America today compared to 1972, particularly in the Midwest. The second map shows that an increase in the elderly population in many parts of the country during 1972-2017, except some segments of the Midwest.
+
+We examine different patterns of associations by applying the previous model to subsets of the data across age groups and time periods. For example, Table 3 presents the results for two age groups (15-29 and 60 and above) and two time periods (1972-82 and 2002-17). The variable `ln_grain_prod.lag` is the grain production (in \$ M) at the beginning of the time period, and `grain_ch_pct` is the percentage change in grain production during the time period. Two dummy variables are included at the change of -100% and 0%, for the 2002-2017 data analysis. The results here suggest that these effects may be heterogeneous across age groups and time periods.
+
+
+```{r reg_map_age, echo=F, out.width = "100%", fig.align = "default"}
+df_pop_grain <- df_pop_grain %>% my_cat_var(pop_ch_pct4, breaks_2)
+
+map_county_cat_var(df_pop_grain  %>% filter(!is.na(pop_ch_pct4), age_group2 == "age_15-29"),
+                    var =  cat_pop_ch_pct4, lower_48 =T,
+                    legend_varname = "Population Change, %",
+                    var_colors = brewer.pal(8, "RdBu"),
+                    title = "Population change, age group 15-29, 1972-2017",
+                    caption = "Data Source: National Cancer Institute SEER Program")
+
+ggsave(file = "manuscript_figures/fig_18a.png", dpi = 600, width=8, height=4)
+
+map_county_cat_var(df_pop_grain  %>% filter(!is.na(pop_ch_pct4), age_group2 == "age_60-up"),
+                    var =  cat_pop_ch_pct4, lower_48 =T,
+                    legend_varname = "Population Change, %",
+                    var_colors = brewer.pal(8, "RdBu"),
+                    title = "Population change, age group 60 or above, 1972-2017",
+                    caption = "Data Source: National Cancer Institute SEER Program")
+
+ggsave(file = "manuscript_figures/fig_18b.png", dpi = 600, width=8, height=4)
+
+```
+
+
+
+```{r reg00, echo=F}
+# impute data pop_ch_pct >= 500 or grain_ch_pct >=500 with NA
+df_pop_grain <- df_pop_grain  %>%
+  mutate(
+    pop_ch_pct = ifelse(pop_ch_pct < 500, pop_ch_pct, NA),
+    grain_ch_pct = ifelse(grain_ch_pct < 500, grain_ch_pct, NA),
+  )
+
+```
+
+```{r reg2, echo=F}
+lm_3 <- lm(pop_ch_pct ~ ln_grain_prod.lag + grain_ch_pct +
+            grain_ch_pct_0 + grain_ch_pct_neg100 + St_name,
+          data = df_pop_grain  %>% filter(age_group2=="age_15-29",Year == 1982))
+
+lm_4 <- lm(pop_ch_pct ~ ln_grain_prod.lag + grain_ch_pct +
+              grain_ch_pct_0 + grain_ch_pct_neg100 + St_name,
+          data = df_pop_grain  %>% filter(age_group2=="age_60-up",Year == 1982))
+
+lm_5 <- lm(pop_ch_pct ~ ln_grain_prod.lag + grain_ch_pct +
+             grain_ch_pct_0 + grain_ch_pct_neg100 + St_name,
+          data = df_pop_grain  %>% filter(age_group2=="age_15-29",Year == 2017))
+
+lm_6 <- lm(pop_ch_pct ~ ln_grain_prod.lag + grain_ch_pct +
+             grain_ch_pct_0 + grain_ch_pct_neg100  + St_name,
+          data = df_pop_grain  %>% filter(age_group2=="age_60-up",Year == 2017))
+
+stargazer(lm_3, lm_4, lm_5, lm_6, type="text",
+          keep = c("ln_grain_prod.lag", "grain_ch_pct"),
+          add.lines = list(c("State fixed effects",rep("Yes",4)),
+                           c("Sample age group","Age 15-29", "60 and up", "Age 15-29", "60 and up"),
+                           c("Sample time period", "1972-82", "1972-82", "2002-2017","2002-2017")),
+          omit.stat=c("f", "ser"))
+```
+
+
+
+To analyze these effects systematically, we arrange a grid of subsamples by age group and time period and apply the same estimation model to each subsample. We use 5 age groups (0-14, 15-29, 30-44, 45-59, 60 and up) and 4 time period (1972-82, 82-92, 92-2002, 2002-17). In a `tibble` data frame, which is a special case of the `data.frame` class, one can split the data by a categorical variable via function `nest()` and store such subsets of data in a list-column. We then apply a regression formula to each row of the data-column and store the results in another list-column.
+
+```{r reg_many}
+# create the age-group and time period combination
+df_pop_grain <- df_pop_grain %>%
+  mutate(age_era = paste0(age_group2, ":", Year, sep=''))
+
+# create a regression function to be applied to a given data.frame
+pop_ch_model <- function(df) {
+  lm( pop_ch_pct ~ ln_grain_prod.lag + grain_ch_pct +
+         grain_ch_pct_0 + grain_ch_pct_neg100 + St_name, data=df)
+}
+
+# function to run a model by group via nest()
+run_model_by_group <- function(df, group_var, model_as_function) {
+  group_var <- enquo(group_var)
+  df2 <- df %>% group_by(!!group_var) %>% nest()
+  df2 %>% mutate(
+    model = map(data, model_as_function),
+    rlt  = map(model, summary) %>% map(coefficients) %>% map(data.frame),
+    varname = map(rlt, rownames),
+    estimate = map(rlt, ~ .x$Estimate),
+    st_error = map(rlt, ~ .x$Std..Error),
+    t_stat = map(rlt, ~ .x$t.value)
+  )
+}
+
+lm_pop_age_era <-
+  run_model_by_group(df_pop_grain  %>% filter(!is.na(age_group2), Year >= 1980),
+                     group_var = age_era,
+                     model_as_function = pop_ch_model)
+
+lm_pop_age_era %>% print(n=5)
+```
+
+
+Here, column `data` is a list-column containing different subsets of the data separated by age group-era combination. List-column `model` contains the corresponding regression outputs, which are summarized in another list-column `rlt`, which are further isolated into list-columns of variable names, point estimates, standard errors, and t statistics. Each cell in `estimate` list-column contains a list of coefficient estimates for a given subsample. These coefficient estimates and standard errors can be extracted by function `unnest()`, which returns a “long”-format data frame that stacks coefficient estimates for various subsamples according to the age group-era combination.
+
+```{r reg_many_2}
+rlt_age_era <- lm_pop_age_era %>%
+  select(age_era, varname, estimate, st_error, t_stat) %>%
+  unnest(cols = c("varname", "estimate", "st_error", "t_stat"))
+rlt_age_era %>% print(n=5)
+```
+
+For selected coefficients, we summarize the results in Figure X. The first figure shows that people of all ages, the baby boomer generation in particular, left grain-producing rural counties throughout 1972-2017. The second figure shows that an increase in grain production was associated with a population decline during 1982-92 and post 2002 across age groups.
+
+```{r reg_many_result, out.width='100%', echo=F}
+theme_set(theme_grey(base_size = 13))
+
+
+rlt_age_era <- rlt_age_era %>% ungroup() %>%
+  mutate(Year = str_extract(age_era, "\\d{4}") %>% as.numeric(),
+         age_group = str_extract(age_era, "[:alpha:]+.\\d+-\\d+"),
+         age_group = ifelse(!is.na(age_group), age_group,
+                            str_extract(age_era, "[:alpha:]+.\\d+-[:alpha:]+")),
+         age_lower = str_extract(age_era, "\\d+") %>% as.numeric(),
+         era = recode(Year,'1982'='72-82', '1992'='82-92','2002'='92-02','2017'='02-17'),
+         age_era2 = paste0(gsub("_"," ",age_group), ", ",era))
+
+
+# extract coefficient esimates of interests
+rlt_age_era2 <- rlt_age_era %>%
+  filter(varname %in% c("ln_grain_prod.lag","grain_ch_pct",
+                        "grain_ch_pct_0TRUE", "grain_ch_pct_neg100TRUE")) %>%
+  mutate(ymin = estimate - 1.96*st_error,
+         ymax = estimate + 1.96*st_error,
+         age_era2 = reorder(age_era2, Year + age_lower/100, FUN = mean),
+         varname2 = factor(varname, levels=c("ln_grain_prod.lag","grain_ch_pct",
+                                            "grain_ch_pct_0TRUE", "grain_ch_pct_neg100TRUE"),
+                          labels = c("logged grain production in beginning year",
+                                     "percent change in grain production",
+                                      "indicator: grain production was zero",
+                                     "indicator: grain production declined to zero"),
+                                     ordered =T))
+
+rlt_age_era2 %>%
+  filter(varname %in% c("ln_grain_prod.lag","grain_ch_pct")) %>%
+  ggplot(aes(x = age_era2, y = estimate, color = factor(Year))) +
+  geom_hline(yintercept = 0, colour = "white", size = 1.5) +
+  geom_point() +
+  geom_errorbar(aes(ymin = ymin, ymax = ymax)) +
+  facet_wrap(~varname2, scales = "free_x") +
+  labs(y = "Coefficient estimates with 95% confidence intervals",
+       x = "Age group and time period") +
+  theme(legend.position = "none")  + coord_flip()
+
+ggsave(file = "manuscript_figures/fig_19.png", dpi = 600, height = 5, width=8)
+
+# rlt_age_era2 %>%
+#   filter(varname %in% c("grain_ch_pct_0TRUE", "grain_ch_pct_neg100TRUE")) %>%
+#   ggplot(aes(x = age_era2, y = estimate, color = factor(Year))) +
+#   geom_hline(yintercept = 0, colour = "white", size = 1.5) +
+#   geom_point() +
+#   geom_errorbar(aes(ymin = ymin, ymax = ymax)) +
+#   facet_wrap(~varname2, scales = "free_x") +
+#   labs(y = "Coefficient estimates with 95% confidence intervals",
+#        x = "Age group and time period") +
+#   theme(legend.position = "none")  + coord_flip()
+```
+
+
+
+While the issue of rural depopulation is beyond the scope of our simple analysis here, we hope it helped shed light on associations between grain farming and population change. Many rural communities were initially developed because of the lands’ potential to produce grain and support their residents. Then, it appears certainly plausible that as grain production intensified with time, farms got bigger and fewer and the communities that relied on grain farming shrunk in its population.
+
+
+# Additional Tools
+
+We briefly mention additional R tools that may be of interest to economists.
+
+### rmarkdown: {-}
+
+The `rmarkdown` package allows for producing documents that mix texts, R code, and the output of the code all in one place. It also accommodates Latex math symbols and equations. Its output can be produced in several file types such as HTML, PDF, and Microsoft Word. `rmarkdown` can be useful for taking notes during data analyses, preparing lab reports, or drafting technical manuscripts. A template is available in RStudio Integrated Development Environment (IDE).
+
+
+### flexdashboard: {-}
+
+As a special case of `rmarkdown` document, the `flexdashboard` output class allows one to easily assemble a dashboard-style layout consisting of separate segments of output panes. For example, multiple plots and tables can be arranged in columns and rows all in one view. A `flexdashboard` template is available in RStudio IED.
+
+### shiny:  {-}
+
+With `shiny` package, one can develop interactive applications that can run on local computers or be deployed online. A template is available in RStudio IED. To learn more, a good place to start is [a tutorial by RStudio](https://shiny.rstudio.com/).
+
+### dygraphs: {-}
+
+With `dygraphs` package, one can create interactive time-series plots on which the user can see values associated with selected data points and select a time pan of the plot to zoom in and out. Here is a simple example;
+```{r dygraph_example, fig.width=6, fig.height=4}
+library(dygraphs)
+load(file="ts_milk_price.RData")
+
+PA <- ts_milk_price %>% filter(state_alpha=="PA") %>%
+  select(Value) %>%
+  ts(start=c(1990, 1), end=c(2019, 08), frequency=12)
+
+CA <- ts_milk_price %>% filter(state_alpha=="CA") %>%
+  select(Value) %>%
+  ts(start=c(1990, 1), end=c(2019, 08), frequency=12)
+
+cbind(PA, CA) %>%
+  dygraph(main = "Monthly Milk Price, $/cwt") %>%
+  dyRangeSelector()
+
+```
+
+
+### leaflet: {-}
+
+`leaflet` package package lets one create interactive maps. Here is an example showing the number of farms that used value-added marketing in 2017;
+```{r leaflet_prep, include=FALSE}
+# download any variable from ACS with geometry and without shift_geo
+us_county_no_shift <- get_acs(geography = "county", variables = "B19013_001",
+                            shift_geo = FALSE, geometry = TRUE)
+```
+
+```{r leflet_example, echo=F}
+library(leaflet)
+load(file = "value_added2.RData")
+
+breaks_1 <- c(-Inf, 0, 10,  25, 50, 75, 100, 150, 200,  Inf)
+
+# merge datasets and convert variable 'Value' into categorical variable 'cat_Value'
+geo_value_added <- left_join(us_county_no_shift, value_added2,  by =c("GEOID"="FIPS"))  %>%
+  my_cat_var(Value, breaks_1)
+
+# define colors for discrete categories
+pal <- colorFactor(palette =  "viridis", domain = geo_value_added$cat_Value,
+                   na.color = 	"#FFFFFF", reverse = T)
+
+# invoke leaflet
+geo_value_added %>%
+  leaflet() %>%
+  addProviderTiles(provider = "CartoDB") %>%
+  addPolygons( popup = ~ paste(NAME, ": ", Value),
+              weight = 1,
+              smoothFactor = 0.2,
+              fillOpacity = 0.7,
+              color = "#b2aeae",
+              fillColor = ~ pal(cat_Value),
+              highlight = highlightOptions(weight = 2,
+                                           color = "#666",
+                                           fillOpacity = 0.9,
+                                           bringToFront = TRUE)
+  ) %>%
+  addLegend("bottomright",
+            pal = pal,
+            values = ~ cat_Value,
+            title = "Farms Using Value-Added Marketing",
+            opacity = 1) %>%
+  setView(-94.5770, 39.1424, zoom = 5)
+```
+
+### Cheatsheets: {-}
+
+We recommend all readers to explore [a collection of cheatsheets hosted by RStudio](https://rstudio.com/resources/cheatsheets/). The cheatsheets provide great summaries of popular R packages and their examples. R beginners would find the cheatsheets for R programming basics and RStudio IDE useful. Experienced R users may find noteworthy package development on popular topics such as big data management and integration with other programming environments.
+
+### Online Searches: {-}
+
+R users quickly learn that the best way to search information or get help is through online search. A key word search usually turns up relevant online Q&A discussions, which work remarkably well for troubleshooting with data plots and unfamiliar packages.
+
+
+### data.table: {-}
+
+While this article focuses on `dplyr` package for data transformation, a popular alternative is `data.table` package. For example, the following code performs the parallel tasks with some of the dplyr code we presented above. Note the differences in the syntax of the two packages.
+
+
+```{r, echo=T, eval=F}
+library(data.table)
+library(magrittr)
+
+us17_dt <- data.table(us17)
+us17_dt[census_table==2 &
+      grepl("COMMODITY TOTALS - OPERATIONS WITH SALES", Item) &
+      !is.na(Class),
+      c("Class", "Value")]
+
+county17_dt <- data.table(county17)
+county17_dt[
+    census_table==2 &
+    grepl("COMMODITY TOTALS - OPERATIONS WITH SALES", Item) &
+    !is.na(Class) & Co_name!="NULL",
+    class_S_NS := ifelse(Class %in% class_S, "S", "NS")] %>%
+  .[, .(Value = sum(Value, na.rm=T)),
+    by = c("St_code", "St_name", "Co_code", "Co_name", "class_S_NS")] %>%
+  .[class_S_NS=="S"] %>%
+  .[order(-Value)] %>% head(n=10)
+```
+
+
+The reader may find that the syntax of data.table is not as readable as that of dplyr. Indeed, the developer of dplyr intentionally designed its syntax to be easy to read and understand. Interested readers may be referred to  [online discussions]( https://stackoverflow.com/questions/21435339/data-table-vs-dplyr-can-one-do-something-well-the-other-cant-or-does-poorly) or [side-by-side comparisons](https://atrebas.github.io/post/2019-03-03-datatable-dplyr/) Also, notice the use of same piping operator `%>%`, which in fact belongs to `magrittr` package (from which `dplyr` imports it). An advantage of `data.table` over `dplyr` is its computational speed, which can become important for large datasets (say, greater than 1 GB). For those who prefer the `dplyr` syntax but want the speed of `data.table`, try a package called `dtplyr`, which is currently being developed by the developer of `dplyr` package as a `data.table` backend for `dplyr` (available from https://github.com/tidyverse/dtplyr).
+
+
+#	 Concluding remarks
+
+We have reviewed the core tools of data visualization and exploration from the recent developments in R freeware. We believe this new generation of tools would be a great asset for economists and students in applied economics. Hands-on learning with such tools can be highly complementary to many of economics courses, and given today’s high demand for data scientists, it is valuable for students to acquire practical skills for EDA. In addition to their knowledge of statistics and econometrics, many students would feel empowered to learn how to inspect and explore real-world data and become capable of generating effective data narratives or new hypotheses.
+
+To advance students’ skills in data analyses and cultivating their interests in economic issues, we suggest three directions of future efforts. First, teaching examples and case studies on EDA education may be shared through teaching journals like this publication. Second, to aid instructors who undertake such teaching, applied economics departments may dedicate some tutorial hours to EDA and hire experienced students as peer tutors. Third, applied economics conferences may host undergraduate competitions for data visualization projects, which focus on public education on relevant issues in our discipline rather than presentations of research outputs. On the last point, the hurdle for creating a data visualization material or a data narrative is much lower, compared to producing new research findings, and therefore such projects could engage a much larger body of students. While it may not be called research in itself, the creation of insightful data plots can contribute to public education, and hence it appears to merit a recognition in applied economics communities. Through the combination of hands-on-learning, technical support, and academic recognition, EDA education can be made an integral part of applied economics curriculum.
+
+
+
+```{r, echo=F, include=F}
+# This shows R version and versions of all packages available in the local environment
+devtools::session_info()
+```
+
+
+### References {-}
+<!-- note: the bib file is incomplete -->
+
+
+
