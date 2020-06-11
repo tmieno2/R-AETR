@@ -1,6 +1,6 @@
 # Online supplement
 
-This folder is an online supplement for the article entitled "**Gold in Them Tha-R Hills: A Review of R Packages for Exploratory Data Analysis**" in _Applied Economics Teaching Resources_ (forthcoming).
+This repository is an online supplement for the article entitled "**Gold in Them Tha-R Hills: A Review of R Packages for Exploratory Data Analysis**" in _Applied Economics Teaching Resources_ (forthcoming).
 
 + citation: TBA
 + Authors: Kota Minegishi and Taro Mieno
